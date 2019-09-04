@@ -461,7 +461,7 @@ def lett2num(msa_lett, code='ACDEFGHIKLMNPQRSTVWY'):
 
     lett2index = {aa: i + 1 for i, aa in enumerate(code)}
     [Nseq, Npos] = [len(msa_lett), len(msa_lett[0])]
-    msa_num = np.zeros((Nseq, Npos)).astype(int)
+    msa_num = np.zeros((Nseq, Npos)).astype(int)  # needs to be int for arpack
     for s, seq in enumerate(msa_lett):
         for i, lett in enumerate(seq):
             if lett in code:
@@ -481,7 +481,7 @@ def alg2bin(alg, N_aa=20):
     '''
 
     [N_seq, N_pos] = alg.shape
-    Abin_tens = np.zeros((N_aa, N_pos, N_seq))
+    Abin_tens = np.zeros((N_aa, N_pos, N_seq))  # arpack gives error for np.int
     for ia in range(N_aa):
         Abin_tens[ia, :, :] = (alg == ia + 1).T
     Abin = sparsify(Abin_tens.reshape(N_aa * N_pos, N_seq, order='F').T)
@@ -674,7 +674,7 @@ def weighted_rand_sel(weights):
 # BASIC STATISTICAL FUNCTIONS
 
 
-def freq(alg, seqw=1, Naa=20, lbda=0, freq0=np.ones(20) / 21):
+def freq(alg, seqw=1, Naa=20, lbda=0, freq0=np.ones(20, dtype=np.float) / 21):
     '''
     Compute amino acid frequencies for a given alignment.
 
@@ -706,7 +706,7 @@ def freq(alg, seqw=1, Naa=20, lbda=0, freq0=np.ones(20) / 21):
 
     Nseq, Npos = alg.shape
     if isinstance(seqw, int) and seqw == 1:
-        seqw = np.ones((1, Nseq))
+        seqw = np.ones((1, Nseq), dtype=np.float)
     seqwn = seqw / seqw.sum()
     al2d = alg2bin(alg, Naa)
     freq1 = seqwn.dot(np.array(al2d.todense()))[0]
@@ -717,7 +717,7 @@ def freq(alg, seqw=1, Naa=20, lbda=0, freq0=np.ones(20) / 21):
                 0)).dot(al2d).todense())
     # Background:
     block = np.outer(freq0, freq0)
-    freq2_bkg = np.zeros((Npos * Naa, Npos * Naa))
+    freq2_bkg = np.zeros((Npos * Naa, Npos * Naa), dtype=np.float)
     for i in range(Npos):
         freq2_bkg[Naa * i:Naa * (i + 1), Naa * i:Naa * (i + 1)] = block
     # Regularizations:
@@ -878,7 +878,7 @@ def posWeights(alg, seqw=1, lbda=0, N_aa=20,
 
     N_seq, N_pos = alg.shape
     if isinstance(seqw, int) and seqw == 1:
-        seqw = np.ones((1, N_seq))
+        seqw = np.ones((1, N_seq), dtype=np.float)
     freq1, freq2, _ = freq(alg, Naa=N_aa, seqw=seqw, lbda=lbda, freq0=freq0)
     # Overall fraction of gaps:
     theta = 1 - freq1.sum() / N_pos
@@ -889,15 +889,15 @@ def posWeights(alg, seqw=1, lbda=0, N_aa=20,
     freq0v = np.tile(freq0, N_pos)
     iok = [i for i in range(N_pos * N_aa) if (freq1[i] > 0 and freq1[i] < 1)]
     # Derivatives of relative entropy per position and amino acid:
-    Wia = np.zeros(N_pos * N_aa)
+    Wia = np.zeros(N_pos * N_aa, dtype=np.float)
     Wia[iok] = abs(np.log((freq1[iok] * (1 - freq0v[iok])) /
                           ((1 - freq1[iok]) * freq0v[iok])))
     # Relative entropies per position and amino acid:
-    Dia = np.zeros(N_pos * N_aa)
+    Dia = np.zeros(N_pos * N_aa, dtype=np.float)
     Dia[iok] = freq1[iok] * np.log(freq1[iok] / freq0v[iok]) \
         + (1 - freq1[iok]) * np.log((1 - freq1[iok]) / (1 - freq0v[iok]))
     # Overall relative entropies per positions (taking gaps into account):
-    Di = np.zeros(N_pos)
+    Di = np.zeros(N_pos, dtype=np.float)
     for i in range(N_pos):
         freq1i = freq1[N_aa * i: N_aa * (i + 1)]
         aok = [a for a in range(N_aa) if freq1i[a] > 0]
@@ -962,7 +962,8 @@ def seqProj(msa_num, seqw, kseq=15, kica=6):
     return Useq, Uica
 
 
-def scaMat(alg, seqw=1, norm='frob', lbda=0, freq0=np.ones(20) / 21,):
+def scaMat(alg, seqw=1, norm='frob', lbda=0,
+           freq0=np.ones(20, dtype=np.float)/21):
     '''
     Computes the SCA matrix.
 
@@ -996,16 +997,16 @@ def scaMat(alg, seqw=1, norm='frob', lbda=0, freq0=np.ones(20) / 21,):
     N_seq, N_pos = alg.shape
     N_aa = 20
     if isinstance(seqw, int) and seqw == 1:
-        seqw = np.ones((1, N_seq))
+        seqw = np.ones((1, N_seq), dtype=np.float)
     freq1, freq2, freq0 = freq(
         alg, Naa=N_aa, seqw=seqw, lbda=lbda, freq0=freq0)
     W_pos = posWeights(alg, seqw, lbda)[0]
     tildeC = np.outer(W_pos, W_pos) * (freq2 - np.outer(freq1, freq1))
 
     # Positional correlations:
-    Cspec = np.zeros((N_pos, N_pos))
-    Cfrob = np.zeros((N_pos, N_pos))
-    P = np.zeros((N_pos, N_pos, N_aa))
+    Cspec = np.zeros((N_pos, N_pos), dtype=np.float)
+    Cfrob = np.zeros((N_pos, N_pos), dtype=np.float)
+    P = np.zeros((N_pos, N_pos, N_aa), dtype=np.float)
     for i in range(N_pos):
         for j in range(i, N_pos):
             u, s, vt = np.linalg.svd(
@@ -1019,9 +1020,9 @@ def scaMat(alg, seqw=1, norm='frob', lbda=0, freq0=np.ones(20) / 21,):
 
     # Projector:
     al2d = np.array(alg2bin(alg).todense())
-    tX = np.zeros((N_seq, N_pos))
+    tX = np.zeros((N_seq, N_pos), dtype=np.float)
     Proj = W_pos * freq1
-    ProjMat = np.zeros((N_pos, N_aa))
+    ProjMat = np.zeros((N_pos, N_aa), dtype=np.float)
     for i in range(N_pos):
         Projati = Proj[N_aa * i:N_aa * (i + 1)]
         if sum(Projati**2) > 0:
@@ -1085,8 +1086,8 @@ def projAlg(alg, Proj):
     N_seq, N_pos = alg.shape
     N_aa = 20
     al2d = np.array(alg2bin(alg).todense())
-    tX = np.zeros((N_seq, N_pos))
-    ProjMat = np.zeros((N_pos, N_aa))
+    tX = np.zeros((N_seq, N_pos), dtype=np.float)
+    ProjMat = np.zeros((N_pos, N_aa), dtype=np.float)
     for i in range(N_pos):
         Projati = Proj[N_aa * i:N_aa * (i + 1)]
         if sum(Projati**2) > 0:
@@ -1352,7 +1353,7 @@ class Pair:
         self.dist = d
 
 
-def directInfo(freq1, freq2, lbda=.5, freq0=np.ones(20) / 21, Naa=20):
+def directInfo(freq1, freq2, lbda=.5, freq0=np.ones(20, dtype=np.float) / 21, Naa=20):
     '''
     Calculate direct information as in the Direct Coupling Analysis (DCA)
     method proposed by M. Weigt et collaborators (Ref: Marcos et al, PNAS 2011,
@@ -1360,14 +1361,14 @@ def directInfo(freq1, freq2, lbda=.5, freq0=np.ones(20) / 21, Naa=20):
 
     **Example**::
 
-      DI = directInfo(freq1, freq2, lbda=.5, freq0=np.ones(20)/21, Naa=20)
+      DI = directInfo(freq1, freq2, lbda=.5, freq0=np.ones(20, dtype=np.float)/21, Naa=20)
     '''
     Npos = int(len(freq1) / Naa)
     Cmat_dat = freq2 - np.outer(freq1, freq1)
 
     # Background:
     block = np.diag(freq0) - np.outer(freq0, freq0)
-    Cmat_bkg = np.zeros((Npos * Naa, Npos * Naa))
+    Cmat_bkg = np.zeros((Npos * Naa, Npos * Naa), dtype=np.float)
     for i in range(Npos):
         Cmat_bkg[Naa * i:Naa * (i + 1), Naa * i:Naa * (i + 1)] = block
 
@@ -1377,7 +1378,7 @@ def directInfo(freq1, freq2, lbda=.5, freq0=np.ones(20) / 21, Naa=20):
 
     # DI at mean-field approx:
     Jmat = -np.linalg.inv(Cmat)
-    DI = np.zeros((Npos, Npos))
+    DI = np.zeros((Npos, Npos), dtype=np.float)
     for i in range(Npos):
         for j in range(i + 1, Npos):
             DI[i, j] = dirInfoFromJ(i, j, Jmat, frq, Naa)
@@ -1405,14 +1406,14 @@ def dirInfoFromJ(i, j, Jmat, frq, Naa=20, epsilon=1e-4):
       DI = dirInfoFromJ(i, j, Jmat, frq, Naa=20, epsilon=1e-4)
    '''
 
-    W = np.ones((Naa + 1, Naa + 1))
+    W = np.ones((Naa + 1, Naa + 1), dtype=np.float)
     W[:Naa, :Naa] = np.exp(Jmat[Naa * i:Naa * (i + 1), Naa * j:Naa * (j + 1)])
-    mui = np.ones(Naa + 1) / (Naa + 1)
-    muj = np.ones(Naa + 1) / (Naa + 1)
-    pi = np.zeros(Naa + 1)
+    mui = np.ones(Naa + 1, dtype=np.float) / (Naa + 1)
+    muj = np.ones(Naa + 1, dtype=np.float) / (Naa + 1)
+    pi = np.zeros(Naa + 1, dtype=np.float)
     pi[:Naa] = frq[Naa * i:Naa * (i + 1)]
     pi[Naa] = 1 - sum(pi)
-    pj = np.zeros(Naa + 1)
+    pj = np.zeros(Naa + 1, dtype=np.float)
     pj[:Naa] = frq[Naa * j:Naa * (j + 1)]
     pj[Naa] = 1 - sum(pj)
     diff = epsilon + 1
@@ -1495,10 +1496,10 @@ def randAlg(frq, Mseq):
     '''
 
     Npos = frq.shape[0]
-    msa_rand = np.zeros((Mseq, Npos), dtype=int)
+    msa_rand = np.zeros((Mseq, Npos), dtype=np.int)
     for i in range(Npos):
         Maa = np.random.multinomial(Mseq, frq[i, :])
-        col = np.array([], dtype=int)
+        col = np.array([], dtype=np.int)
         for aa, M in enumerate(Maa):
             col = np.append(col, np.tile(aa, M))
         np.random.shuffle(col)
@@ -1539,22 +1540,22 @@ def randomize(msa_num, Ntrials, seqw=1, norm='frob', lbda=0, Naa=20, kmax=6,
     '''
 
     if isinstance(seqw, int) and seqw == 1:
-        seqw = np.ones((1, Nseq))
+        seqw = np.ones((1, Nseq), dtype=np.float)
     Mseq = np.round(seqw.sum()).astype(int)
     Nseq, Npos = msa_num.shape
-    Crnd = np.zeros((Npos, Npos))
+    Crnd = np.zeros((Npos, Npos), dtype=np.float)
 
     # Weighted frequencies, including gaps:
     f1, f2, f0 = freq(msa_num, Naa=20, seqw=seqw,
-                      lbda=lbda, freq0=np.ones(20) / 21)
+                      lbda=lbda, freq0=np.ones(20, dtype=np.float) / 21)
     fr1 = np.reshape(f1, (Npos, Naa))
     fr0 = (1.0 - fr1.sum(axis=1)).reshape(Npos, 1)
     fr0[fr0 < tolerance] = 0  # workaround for roundoff errors giving negative fr0
     fr01 = np.concatenate((fr0, fr1), axis=1)
 
     # Multiple randomizations:
-    Vrand = np.zeros((Ntrials, Npos, kmax))
-    Lrand = np.zeros((Ntrials, Npos))
+    Vrand = np.zeros((Ntrials, Npos, kmax), dtype=np.float)
+    Lrand = np.zeros((Ntrials, Npos), dtype=np.float)
     for t in range(Ntrials):
         msa_rand = randAlg(fr01, Mseq)
         Csca = scaMat(msa_rand, norm=norm, lbda=lbda)[0]
@@ -1782,7 +1783,7 @@ def pdbSeq(pdbid, chain='A', path2pdb=settings.path2structures, calcDist=1):
             sequence += 'X'
 
     # Distances between residues (minimal distance between atoms, in angstrom):
-    dist = np.zeros((len(residues), len(residues)))
+    dist = np.zeros((len(residues), len(residues)), dtype=np.float)
     if calcDist == 1:
         for n0, res0 in enumerate(residues):
             for n1, res1 in enumerate(residues):
