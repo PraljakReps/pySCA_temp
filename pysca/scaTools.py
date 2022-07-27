@@ -557,7 +557,7 @@ def MSAsearch(hd, algn, seq, species=None):
                 strseqnum = i_0
             os.remove("tmp_pdb_seq.fasta")
             os.remove("tmp_algn_seq.fasta")
-            os.remove("tmp_neelde_seq.fasta")
+            os.remove("tmp_needle_seq.fasta")
             return strseqnum
         except BaseException as e:
             print("Error: " + str(e))
